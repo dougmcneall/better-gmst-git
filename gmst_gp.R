@@ -14,7 +14,8 @@ colnames(hadcrut4) = c('Year', 'Anomaly')
 # take a sample of HadCRUT4 data, so that fitting isn't so slow for the minute.
 # call the sample y
 ix = seq(from = 1, to = nrow(hadcrut4), by = 10)
-y = hadcrut4[ix, 2]
+#y = hadcrut4[ix, 2]
+y = hadcrut4[,2]
 T = length(y)
 t = 1:T
 
