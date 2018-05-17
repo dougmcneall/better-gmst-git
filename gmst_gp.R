@@ -13,8 +13,10 @@ colnames(hadcrut4) = c('Year', 'Anomaly')
 
 # take a sample of HadCRUT4 data, so that fitting isn't so slow for the minute.
 # call the sample y
-ix = seq(from = 1, to = nrow(hadcrut4), by = 10)
-#y = hadcrut4[ix, 2]
+# ix = seq(from = 1, to = nrow(hadcrut4), by = 10)
+# y = hadcrut4[ix, 2]
+
+# Use full data set
 y = hadcrut4[,2]
 T = length(y)
 t = 1:T
@@ -29,54 +31,55 @@ model
   # Likelihood
   y ~ dmnorm(Mu, Sigma.inv)
   Sigma.inv <- inverse(Sigma)
-  
+
   # Set up mean and covariance matrix
   for(i in 1:T) {
   Mu[i] <- alpha
   Sigma[i,i] <- pow(sigma, 2) + pow(tau, 2)
-  
+
   for(j in (i+1):T) {
   Sigma[i,j] <- pow(tau, 2) * exp( - rho * pow(t[i] - t[j], 2) )
   Sigma[j,i] <- Sigma[i,j]
   }
   }
   
+  # JAGS uses precision (= 1/variance) not standard deviation, so
+  # dnorm (0,0.01) is equiv to dnorm(0, 10^2) in normal R
+
   alpha ~ dnorm(0, 0.01) # default dnorm(0, 0.01)
   sigma ~ dunif(0, 10) # default dunif(0,10)
   tau ~ dunif(0, 10) # default dunif(0, 10)
-  rho ~ dunif(0.1, 5) # default dunif(0.1, 5)
-  
-} 
+  rho ~ dunif(0.01, 5) # default dunif(0.1, 5)
+
+}
   '
-  
+
 model_data = list(T = T, y = y, t = t)
-  
+
 # Choose the parameters to watch
 model_parameters =  c("alpha", "sigma", "tau", "rho")
-  
+
 # Run the model - This can be slow with lots of data
 model_run = jags(data = model_data,
                  parameters.to.save = model_parameters,
                  model.file=textConnection(model_code),
                  n.chains=4, # Number of different starting positions
                  n.iter=1000, # Number of iterations
-                 n.burnin=000, # Number of iterations to remove at start
+                 n.burnin=200, # Number of iterations to remove at start
                  n.thin=2) # Amount of thinning
-
-
 
 alpha = model_run$BUGSoutput$sims.list$alpha
 tau = model_run$BUGSoutput$sims.list$tau
 sigma = model_run$BUGSoutput$sims.list$sigma
 rho = model_run$BUGSoutput$sims.list$rho
+
+pdf(file = 'parameter_estimates.pdf', width = 7, height = 5)
 par(mfrow = c(2,2))
 hist(alpha, breaks=30)
 hist(tau, breaks=30)
 hist(sigma, breaks=30)
 hist(rho, breaks=30)
-
-#rho = rnorm(1000, mean = 10, sd = 0.1)
-
+dev.off()
 
 # Plot the GP
 
@@ -94,7 +97,7 @@ Sigma = mean(sigma)^2 * diag(T) + mean(tau)^2 * exp( - mean(rho) * outer(t,t,'-'
 pred_mean = Mu_new + t(Sigma_new)%*%solve(Sigma, y - Mu)
 pred_var = Sigma_star - t(Sigma_new)%*%solve(Sigma, Sigma_new)
 
-par(mfrow = c(1,1))
+pdf(file = 'interpolated_gp.pdf', width = 7, height = 5)
 plot(t,y)
 lines(t_new, pred_mean, col='red')
 
@@ -102,6 +105,7 @@ pred_low = pred_mean - 1.95 * sqrt(diag(pred_var))
 pred_high = pred_mean + 1.95 * sqrt(diag(pred_var))
 lines(t_new, pred_low, col = 'red', lty = 2)
 lines(t_new, pred_high, col = 'red', lty = 2)
+dev.off()
 
 # Extrapolate
 T_ext = 30
@@ -118,7 +122,7 @@ ext_var = Sigma_ext_star - t(Sigma_ext)%*%solve(Sigma, Sigma_ext)
 ext_low = ext_mean - 1.95 * sqrt(diag(ext_var))
 ext_high = ext_mean + 1.95 * sqrt(diag(ext_var))
 
-par(mfrow = c(1,1))
+pdf(file = 'extrapolate_mean.pdf', width = 7, height = 5)
 plot(t,y, xlim = c(0,T*1.5), ylim = range(y, ext_high, ext_low))
 
 # plot the interpolated best estimate and uncertainty
@@ -130,13 +134,11 @@ lines(t_new, pred_high, col = 'red', lty = 2)
 lines(t_ext, ext_mean, col='blue')
 lines(t_ext, ext_low, col = 'blue', lty = 2)
 lines(t_ext, ext_high, col = 'blue', lty = 2)
+dev.off()
 
-# NOTE Looks like the extrapolation isn't on the same resolution
-# as the original data. Needs fixing.
-
-# Need to add a (linear?) basis function
 
 # recreate the plot from the previous code chunk
+pdf(file = 'sample_uncertainty.pdf', width = 7, height = 5)
 plot(t,y, xlim = c(0,T*1.5), ylim = range(y, ext_high, ext_low))
 
 # Take samples from the markov chain to show the possible solutions.
@@ -151,8 +153,6 @@ for(i in 1500:1600){
   pred_samp = Mu_new + t(Sigma_new)%*%solve(Sigma, y - Mu)
   lines(t_new, pred_samp, col='grey')
 }
-
-#  plot(t,y, xlim = c(0,1.3), ylim = range(y, ext_high, ext_low))
 
 for(i in 1:200){
   T_ext = 30
@@ -178,6 +178,41 @@ lines(t_ext, ext_mean, col='blue')
 lines(t_ext, ext_low, col = 'blue', lty = 2)
 lines(t_ext, ext_high, col = 'blue', lty = 2)
 lines(t_new, pred_samp, col='grey')
+dev.off()
+
+# Need to add a (linear?) basis function
+# A possible extension to include a linear prior.
+# model_code = '
+# model
+# {
+#   # Likelihood
+#   y ~ dmnorm(Mu, Sigma.inv)
+#   Sigma.inv <- inverse(Sigma)
+#
+#   # Set up mean and covariance matrix
+#   for(i in 1:T) {
+#   Mu[i] <- alpha + beta * t[i]
+#   Sigma[i,i] <- pow(sigma, 2) + pow(tau, 2)
+#
+#   for(j in (i+1):T) {
+#   Sigma[i,j] <- pow(tau, 2) * exp( - rho * pow(t[i] - t[j], 2) )
+#   Sigma[j,i] <- Sigma[i,j]
+#   }
+#   }
+#
+#   alpha ~ dnorm(0, 0.01) # default dnorm(0, 0.01)
+#   sigma ~ dunif(0, 10) # default dunif(0,10)
+#   tau ~ dunif(0, 100) # default dunif(0, 10)
+#   rho ~ dunif(0.1, 5) # default dunif(0.1, 5)
+#   beta ~ dnorm(0, 100)
+#
+# }
+#   '
+#
+#   model_data = list(T = T, y = y, t = t)
+#
+#   # Choose the parameters to watch
+#   model_parameters =  c("alpha", "sigma", "tau", "rho", "beta")
 
   
   
