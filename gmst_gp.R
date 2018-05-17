@@ -75,9 +75,14 @@ hist(tau, breaks=30)
 hist(sigma, breaks=30)
 hist(rho, breaks=30)
 
+#rho = rnorm(1000, mean = 10, sd = 0.1)
+
+
 # Plot the GP
 
-T_new = 50
+T_new = 100 # number of interpolation points for looking at the way the GP mean
+            # function fits. 100 seems a good number, which captures the variability
+
 t_new = seq(0,T,length=T_new)
 Mu = rep(mean(alpha), T)
 Mu_new = rep(mean(alpha), T_new)
@@ -100,7 +105,7 @@ lines(t_new, pred_high, col = 'red', lty = 2)
 
 # Extrapolate
 T_ext = 30
-t_ext = seq(1,T*1.5,length=T_ext)
+t_ext = seq(T+1,T*1.5,length = T_ext) # this needs to be at same res as data
 Mu = rep(mean(alpha), T)
 Mu_ext = rep(mean(alpha), T_ext)
 Sigma_ext = mean(tau)^2 * exp( -mean(rho) * outer(t, t_ext, '-')^2 )
@@ -126,6 +131,9 @@ lines(t_ext, ext_mean, col='blue')
 lines(t_ext, ext_low, col = 'blue', lty = 2)
 lines(t_ext, ext_high, col = 'blue', lty = 2)
 
+# NOTE Looks like the extrapolation isn't on the same resolution
+# as the original data. Needs fixing.
+
 # Need to add a (linear?) basis function
 
 # recreate the plot from the previous code chunk
@@ -148,7 +156,7 @@ for(i in 1500:1600){
 
 for(i in 1:200){
   T_ext = 30
-  t_ext = seq(1,T*1.5,length=T_ext)
+  t_ext = seq(T+1,T*1.5,length=T_ext)
   Mu = rep(alpha[i], T)
   Mu_ext = rep(alpha[i], T_ext)
   Sigma_ext = tau[i]^2 * exp( -rho[i] * outer(t, t_ext, '-')^2 )
