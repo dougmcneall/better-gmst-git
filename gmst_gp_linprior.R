@@ -35,7 +35,7 @@ model
   # Set up mean and covariance matrix
   for(i in 1:T) {
   #Mu[i] <- alpha
-  Mu[i] <- alpha
+  Mu[i] <- alpha + beta * t[i]
   Sigma[i,i] <- pow(sigma, 2) + pow(tau, 2)
 
   for(j in (i+1):T) {
@@ -51,6 +51,7 @@ model
   sigma ~ dunif(0, 10) # default dunif(0,10)
   tau ~ dunif(0, 10) # default dunif(0, 10)
   rho ~ dunif(0.01, 5) # default dunif(0.1, 5)
+  beta ~ dnorm(0, 0.1)
 
 }
   '
@@ -58,7 +59,7 @@ model
 model_data = list(T = T, y = y, t = t)
 
 # Choose the parameters to watch
-model_parameters =  c("alpha", "sigma", "tau", "rho")
+model_parameters =  c("alpha", "sigma", "tau", "rho", "beta")
 
 # Run the model - This can be slow with lots of data
 model_run = jags(data = model_data,
@@ -73,13 +74,15 @@ alpha = model_run$BUGSoutput$sims.list$alpha
 tau = model_run$BUGSoutput$sims.list$tau
 sigma = model_run$BUGSoutput$sims.list$sigma
 rho = model_run$BUGSoutput$sims.list$rho
+beta = model_run$BUGSoutput$sims.list$beta
 
-pdf(file = 'parameter_estimates.pdf', width = 7, height = 5)
-par(mfrow = c(2,2))
+pdf(file = 'parameter_estimates_linprior.pdf', width = 7, height = 5)
+par(mfrow = c(2,3))
 hist(alpha, breaks=30)
 hist(tau, breaks=30)
 hist(sigma, breaks=30)
 hist(rho, breaks=30)
+hist(beta, breaks=30)
 dev.off()
 
 # Plot the GP
@@ -88,8 +91,8 @@ T_new = 100 # number of interpolation points for looking at the way the GP mean
             # function fits. 100 seems a good number, which captures the variability
 
 t_new = seq(0,T,length=T_new)
-Mu = rep(mean(alpha), T)
-Mu_new = rep(mean(alpha), T_new)
+Mu = rep(mean(alpha), T) + (t* mean(beta))
+Mu_new = rep(mean(alpha), T_new) + (t_new * mean(beta))
 Sigma_new = mean(tau)^2 * exp( -mean(rho) * outer(t, t_new, '-')^2 )
 Sigma_star = mean(sigma)^2 * diag(T_new) + mean(tau)^2 * exp( - mean(rho) * outer(t_new,t_new,'-')^2 )
 Sigma = mean(sigma)^2 * diag(T) + mean(tau)^2 * exp( - mean(rho) * outer(t,t,'-')^2 )
@@ -98,7 +101,7 @@ Sigma = mean(sigma)^2 * diag(T) + mean(tau)^2 * exp( - mean(rho) * outer(t,t,'-'
 pred_mean = Mu_new + t(Sigma_new)%*%solve(Sigma, y - Mu)
 pred_var = Sigma_star - t(Sigma_new)%*%solve(Sigma, Sigma_new)
 
-pdf(file = 'interpolated_gp.pdf', width = 7, height = 5)
+pdf(file = 'interpolated_gp_linprior.pdf', width = 7, height = 5)
 plot(t,y)
 lines(t_new, pred_mean, col='red')
 
@@ -111,8 +114,8 @@ dev.off()
 # Extrapolate
 T_ext = 30
 t_ext = seq(T+1,T*1.5,length = T_ext) # this needs to be at same res as data
-Mu = rep(mean(alpha), T)
-Mu_ext = rep(mean(alpha), T_ext)
+Mu = rep(mean(alpha), T) + (t* mean(beta))
+Mu_ext = rep(mean(alpha), T_ext) + (t_ext * mean(beta))
 Sigma_ext = mean(tau)^2 * exp( -mean(rho) * outer(t, t_ext, '-')^2 )
 Sigma_ext_star = mean(sigma)^2 * diag(T_ext) + mean(tau)^2 * exp( - mean(rho) * outer(t_ext,t_ext,'-')^2 )
 Sigma = mean(sigma)^2 * diag(T) + mean(tau)^2 * exp( - mean(rho) * outer(t,t,'-')^2 )
@@ -123,7 +126,7 @@ ext_var = Sigma_ext_star - t(Sigma_ext)%*%solve(Sigma, Sigma_ext)
 ext_low = ext_mean - 1.95 * sqrt(diag(ext_var))
 ext_high = ext_mean + 1.95 * sqrt(diag(ext_var))
 
-pdf(file = 'extrapolate_mean.pdf', width = 7, height = 5)
+pdf(file = 'extrapolate_mean_linprior.pdf', width = 7, height = 5)
 plot(t,y, xlim = c(0,T*1.5), ylim = range(y, ext_high, ext_low))
 
 # plot the interpolated best estimate and uncertainty
@@ -139,13 +142,13 @@ dev.off()
 
 
 # recreate the plot from the previous code chunk
-pdf(file = 'sample_uncertainty.pdf', width = 7, height = 5)
+pdf(file = 'sample_uncertainty_linprior.pdf', width = 7, height = 5)
 plot(t,y, xlim = c(0,T*1.5), ylim = range(y, ext_high, ext_low))
 
 # Take samples from the markov chain to show the possible solutions.
 for(i in 1500:1600){
-  Mu = rep(alpha[i], T)
-  Mu_new = rep(alpha[i], T_new)
+  Mu = rep(mean(alpha[i]), T) + (t* mean(beta[i]))
+  Mu_new = rep(mean(alpha[i]), T_new) + (t_new * mean(beta[i]))
   Sigma_new = tau[i]^2 * exp( -rho[i] * outer(t, t_new, '-')^2 )
   Sigma_star = sigma[i]^2 * diag(T_new) + tau[i]^2 * exp( - rho[i] * outer(t_new,t_new,'-')^2 )
   Sigma = sigma[i]^2 * diag(T) + tau[i]^2 * exp( - rho[i] * outer(t,t,'-')^2 )
@@ -158,8 +161,9 @@ for(i in 1500:1600){
 for(i in 1:200){
   T_ext = 30
   t_ext = seq(T+1,T*1.5,length=T_ext)
-  Mu = rep(alpha[i], T)
-  Mu_ext = rep(alpha[i], T_ext)
+  t_ext = seq(T+1,T*1.5,length = T_ext) # this needs to be at same res as data
+  Mu = rep(mean(alpha[i]), T) + (t* mean(beta[i]))
+  Mu_ext = rep(mean(alpha[i]), T_ext) + (t_ext * mean(beta[i]))
   Sigma_ext = tau[i]^2 * exp( -rho[i] * outer(t, t_ext, '-')^2 )
   Sigma_ext_star = sigma[i]^2 * diag(T_ext) + tau[i]^2 * exp( - rho[i] * outer(t_ext,t_ext,'-')^2 )
   Sigma = sigma[i]^2 * diag(T) + tau[i]^2 * exp( - rho[i] * outer(t,t,'-')^2 )
