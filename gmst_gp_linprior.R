@@ -13,11 +13,11 @@ colnames(hadcrut4) = c('Year', 'Anomaly')
 
 # take a sample of HadCRUT4 data, so that fitting isn't so slow for the minute.
 # call the sample y
- ix = seq(from = 1, to = nrow(hadcrut4), by = 10)
- y = hadcrut4[ix, 2]
+#ix = seq(from = 1, to = nrow(hadcrut4), by = 10)
+# y = hadcrut4[ix, 2]
 
 # Use full data set
-#y = hadcrut4[,2]
+y = hadcrut4[,2]
 T = length(y)
 t = 1:T
 
@@ -34,7 +34,7 @@ model
 
   # Set up mean and covariance matrix
   for(i in 1:T) {
-  #Mu[i] <- alpha
+
   Mu[i] <- alpha + beta * t[i]
   Sigma[i,i] <- pow(sigma, 2) + pow(tau, 2)
 
@@ -147,8 +147,8 @@ plot(t,y, xlim = c(0,T*1.5), ylim = range(y, ext_high, ext_low))
 
 # Take samples from the markov chain to show the possible solutions.
 for(i in 1500:1600){
-  Mu = rep(mean(alpha[i]), T) + (t* mean(beta[i]))
-  Mu_new = rep(mean(alpha[i]), T_new) + (t_new * mean(beta[i]))
+  Mu = rep(alpha[i], T) + (t* beta[i])
+  Mu_new = rep(alpha[i], T_new) + (t_new * beta[i])
   Sigma_new = tau[i]^2 * exp( -rho[i] * outer(t, t_new, '-')^2 )
   Sigma_star = sigma[i]^2 * diag(T_new) + tau[i]^2 * exp( - rho[i] * outer(t_new,t_new,'-')^2 )
   Sigma = sigma[i]^2 * diag(T) + tau[i]^2 * exp( - rho[i] * outer(t,t,'-')^2 )
@@ -162,8 +162,8 @@ for(i in 1:200){
   T_ext = 30
   t_ext = seq(T+1,T*1.5,length=T_ext)
   t_ext = seq(T+1,T*1.5,length = T_ext) # this needs to be at same res as data
-  Mu = rep(mean(alpha[i]), T) + (t* mean(beta[i]))
-  Mu_ext = rep(mean(alpha[i]), T_ext) + (t_ext * mean(beta[i]))
+  Mu = rep(alpha[i], T) + (t* beta[i])
+  Mu_ext = rep(alpha[i], T_ext) + (t_ext * beta[i])
   Sigma_ext = tau[i]^2 * exp( -rho[i] * outer(t, t_ext, '-')^2 )
   Sigma_ext_star = sigma[i]^2 * diag(T_ext) + tau[i]^2 * exp( - rho[i] * outer(t_ext,t_ext,'-')^2 )
   Sigma = sigma[i]^2 * diag(T) + tau[i]^2 * exp( - rho[i] * outer(t,t,'-')^2 )
